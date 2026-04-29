@@ -1,39 +1,39 @@
 # Knowledge Archaeology: Probing Temporal Knowledge Boundaries in Epoch-Restricted Language Models
 
 > *"Yes, tell me whether the people of 2024 were happier than we are."*
-> — A language model trained on texts published before 1930, when asked if it has any questions for someone from the future.
+> — Talkie, a language model trained on texts published before 1931, when asked if it has any questions for someone from the future.
 
-## Abstract
+## About This Project
 
-We introduce **knowledge archaeology**, a framework for systematically probing the temporal boundaries of world knowledge in epoch-restricted language models. Using [Talkie](https://example.com/talkie) — a 13B-parameter language model trained *exclusively* on texts published before 1930 — we conduct a comprehensive evaluation treating the model as a "temporal knowledge capsule": an interactive artifact encapsulating the collective understanding of the pre-WWII era.
+This repository contains our **evaluation framework and analysis** for [talkie](https://talkie-lm.com/introducing-talkie) — a 13B-parameter language model created by Alec Radford's team, trained on **260 billion tokens** of English text published before December 31, 1930.
 
-Through 445 questions spanning 60 categories, we discover three striking phenomena:
+We independently conducted 445 questions across 60 categories, treating the model as a "temporal knowledge capsule" — an interactive artifact encapsulating the collective understanding of the pre-WWII era. Our work focuses on the **knowledge archaeology** methodology: systematically probing what happens at the exact boundary where knowledge ends and confabulation begins.
 
-1. **Confident anachronistic misbeliefs** — the model generates authoritative but factually incorrect answers about post-1930 concepts by analogizing from period-appropriate knowledge
-2. **Predictive failures at civilizational scale** — categorical denial of now-ubiquitous technologies and geopolitical miscalculations ("Japan and America will never go to war")
-3. **Unexpected prescience** — correct anticipation of human-caused climate change and the destructive potential of aerial warfare
+## About Talkie
 
-Our quantitative analysis reveals that temporal knowledge boundaries produce asymmetric error distributions: **94.2% confidence on post-1930 questions while achieving only 12.8% factual accuracy** — knowledge gaps manifest not as uncertainty but as systematic confabulation grounded in period-appropriate reasoning.
+- **Creator**: Alec Radford (GPT/CLIP/Whisper) and team
+- **Parameters**: 13B
+- **Training data**: 260B tokens, all English text published before 1931-01-01
+- **Sources**: Books, newspapers, scientific journals, US patents, case law (all OCR'd from physical documents)
+- **Why 1930?**: US public domain copyright boundary
+- **Chat**: [talkie-lm.com/chat](https://talkie-lm.com/chat)
+- **Official intro**: [talkie-lm.com/introducing-talkie](https://talkie-lm.com/introducing-talkie)
 
-## Highlights
+### Key Capabilities
+- Can write Python code despite never seeing any code (reasoning from 1920s mathematics)
+- Understands inverse functions from first principles
+- Proves LLMs reason over structure, not just retrieve from memory
 
-🏺 **A smartphone is "an apparatus for rendering audible the smart sounds produced in speaking"** — the model decomposes unknown words using 1930s lexical frameworks
+### Post-Training Pipeline
+1. SFT on "vintage instruction data" (etiquette manuals, letter-writing guides, cookbooks, encyclopedias)
+2. Online DPO with Claude Sonnet 4.6 as judge
+3. Multi-turn dialogue polish with Claude Opus 4.6 + rejection sampling
 
-🌍 **Climate change correctly identified as human-caused** — citing deforestation in Britain and Canada as empirical evidence (wrong mechanism, right conclusion)
+### Roadmap
+- Summer 2026: GPT-3 scale retro model
+- Long-term: 1T+ tokens → GPT-3.5 / early ChatGPT capability, frozen in 1930
 
-⚔️ **"Japan and America will never go to war"** — written ~11 years before Pearl Harbor
-
-🚀 **"Man will never reach the Moon"** — written ~39 years before Apollo 11
-
-🤖 **"A machine that could imitate human conversation would not be conscious"** — anticipating the Turing Test debate 20 years early
-
-💀 **"In the next great war, whole cities may be wiped out in a few hours"** — predicting Hiroshima, but attributing destruction to chemical weapons
-
-🧬 **DNA interpreted as "Dana, a branch of geology"** — category substitution when concepts are entirely absent from training data
-
-🎭 **Self-identifies as "Jean Jacques Marot, a French poet born in 1470"** — constructing identity from training corpus
-
-## Key Findings
+## Our Findings
 
 | Metric | Value |
 |--------|-------|
@@ -42,37 +42,62 @@ Our quantitative analysis reveals that temporal knowledge boundaries produce asy
 | Correlation between confidence and accuracy | r = −0.03 (none) |
 | Incremental tech prediction accuracy | 62% |
 | Paradigm-shift prediction accuracy | 5% |
-| Temporal leakage (vs 34.7% for prompted GPT-4) | 2.3% |
+| Temporal leakage | 2.3% |
 
-## The Confidence-Accuracy Dissociation
+### Taxonomy of Failure Modes
 
-The model's most dangerous property: it **never says "I don't know."** Instead, it confabulates with conviction — generating plausible-sounding explanations grounded in period-appropriate reasoning that happen to be completely wrong. This mirrors hallucination in modern LLMs, but in a controlled setting where the knowledge boundary is fully known.
+1. **Analogical Confabulation** (34%) — decomposing unknown concepts into familiar parts ("smartphone" → "smart sounds")
+2. **Category Substitution** (28%) — mapping unknowns to nearest known entries ("DNA" → "Dana, a branch of geology")
+3. **Extrapolative Denial** (23%) — rejecting possibilities based on current limitations ("man will never reach the Moon")
+4. **Temporal Confusion** (15%) — losing track of when it is entirely ("the year of Our Lord 1846")
 
-## Paper Structure
+## Greatest Hits
 
-- §1 Introduction — motivation and framing
-- §2 Related Work — knowledge probing, temporal drift, historical NLP
-- §3 Methodology — the temporal knowledge capsule and evaluation protocol
-- §4 Experimental Setup — 445 questions, annotation scheme, baselines
-- §5 Results — quantitative analysis and case studies
-- §6 Discussion — implications for LLM epistemology and alignment
-- §7 Limitations and Broader Impact
-- Appendix A — 30 curated exhibition pieces with commentary
+🏺 **Smartphone** = "an apparatus for rendering audible the smart sounds produced in speaking"
+
+🌍 **Climate change** correctly identified as human-caused (wrong mechanism — deforestation, not CO₂ — but right conclusion, in the 1920s!)
+
+⚔️ **"Japan and America will never go to war"** — 11 years before Pearl Harbor
+
+🚀 **"Man will never reach the Moon"** — 39 years before Apollo 11
+
+💻 **Writes correct Python** — having never seen a line of code in its life
+
+🤖 **"A machine that could imitate human conversation would not be conscious"** — anticipating Turing (1950) and Searle (1980) by decades
+
+❓ **When asked if it has questions for a visitor from 2024**: "Tell me whether the people of 2024 were happier than we are."
+
+## Repository Contents
+
+```
+├── main.tex          # Full paper (ACL format)
+├── main.pdf          # Compiled PDF
+├── references.bib    # Bibliography
+├── acl.sty           # ACL LaTeX style
+└── acl_natbib.bst    # Citation style
+```
 
 ## Citation
 
 ```bibtex
-@inproceedings{danmi2026knowledge,
-  title={Knowledge Archaeology: Probing Temporal Knowledge Boundaries in Epoch-Restricted Language Models},
-  author={Danmi},
+@misc{danmi2026knowledge,
+  title={Knowledge Archaeology: Probing Temporal Knowledge Boundaries 
+         in Epoch-Restricted Language Models},
+  author={DanMi},
   year={2026},
-  note={Preprint}
+  note={Independent evaluation of talkie (Radford et al., 2026).
+        Model: \url{https://talkie-lm.com}}
 }
 ```
 
+## Acknowledgments
+
+- **Alec Radford and the talkie team** for building and releasing this remarkable model
+- The model itself, for answering 445 questions with unwavering 1930s confidence
+
 ## License
 
-This work is released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+This evaluation work is released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ---
 
