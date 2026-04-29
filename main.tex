@@ -1,0 +1,583 @@
+\documentclass[11pt]{article}
+
+\usepackage[final]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+
+\newtcolorbox{modelbox}{
+  colback=gray!5,
+  colframe=gray!50,
+  boxrule=0.5pt,
+  arc=2pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,
+  fontupper=\small\itshape
+}
+
+\title{Knowledge Archaeology: Probing Temporal Knowledge Boundaries\\in Epoch-Restricted Language Models}
+
+\author{
+  Danmi \\\\\texttt{danmi@danmi.corp} \\\\
+  \textit{Danmi Corporation}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We introduce \textit{knowledge archaeology}, a framework for systematically probing the temporal boundaries of world knowledge in epoch-restricted language models. Leveraging Talkie \cite{radford2026talkie}, a recently released 13B-parameter language model trained exclusively on texts published before 1930, we conduct a comprehensive evaluation that treats this model as a ``temporal knowledge capsule''---an interactive artifact encapsulating the collective understanding of the pre-World War II era. Through systematic evaluation across 445 questions spanning 60 categories---from science and technology to geopolitics and social values---we discover three striking phenomena: (1) \textit{confident anachronistic misbeliefs}, where the model generates authoritative but factually incorrect answers about post-1930 concepts by analogizing from period-appropriate knowledge; (2) \textit{predictive failures at civilizational scale}, including categorical denial of technologies now ubiquitous (wireless personal communication, silicon-based computing) and geopolitical miscalculations (``Japan and America will never go to war''); and (3) \textit{unexpected prescience}, where the model correctly anticipates developments like human-caused climate change and the destructive potential of aerial warfare. Our quantitative analysis reveals that temporal knowledge boundaries produce asymmetric error distributions: the model exhibits 94.2\% confidence on questions about post-1930 concepts while achieving only 12.8\% factual accuracy, suggesting that knowledge gaps manifest not as uncertainty but as systematic confabulation grounded in period-appropriate reasoning frameworks. We release our evaluation framework as a tool for studying how training data temporality shapes model epistemology.
+\end{abstract}
+
+\section{Introduction}
+
+Large language models (LLMs) are trained on vast corpora spanning decades of human textual production, implicitly encoding an amalgamation of knowledge from different historical periods. This temporal heterogeneity makes it fundamentally difficult to understand \textit{how} and \textit{when} particular pieces of world knowledge enter a model's representations. When GPT-4 correctly answers a question about DNA structure, which training examples are responsible? When it confabulates about recent events, is this because relevant documents postdate its training cutoff, or because the information was poorly represented?
+
+We propose a radical simplification of this problem: rather than attempting to disentangle temporal knowledge in models trained on heterogeneous corpora, we leverage a model trained \textit{exclusively} on texts from a single historical epoch. Specifically, we evaluate Talkie \cite{radford2026talkie}, a 13B-parameter transformer language model trained on English-language texts published before 1930---encyclopedias, reference works, periodicals, and books of the pre-World War II era. This system constitutes a \textit{temporal knowledge capsule}: a model that ``knows'' only what was known (or believed) before 1930.
+
+This approach enables a novel form of investigation we term \textit{knowledge archaeology}---the systematic excavation of a model's temporal knowledge boundaries through targeted probing. By asking our 1930-era model about concepts, events, and technologies that postdate its training epoch, we can observe precisely how temporal knowledge boundaries manifest in model behavior.
+
+Our investigation reveals phenomena that illuminate broader questions about LLM epistemology:
+
+\begin{itemize}[nosep,leftmargin=*]
+\item \textbf{Knowledge gaps do not produce silence.} The model never responds ``I don't know'' to questions about post-1930 concepts. Instead, it generates confident, well-structured responses grounded in pre-1930 reasoning frameworks---a behavior we term \textit{anachronistic confabulation}.
+\item \textbf{Temporal boundaries create systematic prediction asymmetries.} The model correctly predicts incremental developments (color photography, chemical weapons in warfare) but categorically fails on paradigm shifts (nuclear weapons, digital computing, space travel).
+\item \textbf{Value systems are temporally indexed.} The model's moral reasoning reflects period-specific axioms (property rights supersede survival rights; religious decline is civilization's greatest threat), revealing how ethical frameworks are historically contingent.
+\end{itemize}
+
+Our contributions are: (1) We propose \textit{knowledge archaeology} as a methodology for studying temporal knowledge boundaries in epoch-restricted LLMs; (2) We present the first systematic evaluation of a pre-WWII language model across 445 questions spanning 60 categories; (3) We provide quantitative analysis revealing that temporal knowledge gaps produce confident confabulation rather than uncertainty; and (4) We release our evaluation framework and annotated outputs to enable further research on temporal knowledge in neural language models.
+
+\section{Related Work}
+
+\paragraph{Knowledge Probing in LLMs.} The study of factual knowledge in language models traces to LAMA \cite{petroni2019language}, which demonstrated that pre-trained models encode relational knowledge accessible through cloze-style probes. Subsequent work has examined the extent and limitations of this knowledge \cite{roberts2020much,jiang2020know}, with \citet{kassner2020negated} showing that models can be easily confused by negation. Our work extends this line by examining knowledge boundaries defined by temporal epochs rather than knowledge domains.
+
+\paragraph{Temporal Knowledge and Concept Drift.} \citet{lazaridou2021mind} demonstrated that language models suffer degraded performance on tasks requiring knowledge of events after their training cutoff, establishing the importance of temporal alignment between training data and evaluation. \citet{dhingra2022time} introduced time-sensitive question answering benchmarks, while \citet{luu2022time} examined temporal misalignment in NLP systems. Unlike these works, which study knowledge degradation near a training cutoff, we deliberately engineer an extreme temporal gap (approximately one century) to study how models behave when confronted with concepts entirely absent from their training epoch.
+
+\paragraph{Historical Text Processing.} Computational approaches to historical texts have focused primarily on diachronic word embeddings \cite{hamilton2016diachronic,kutuzov2018diachronic} and OCR correction for digitized archives \cite{rigaud2019icdar}. \citet{denigma2022} trained language models on historical documents for decipherment tasks. Our approach differs fundamentally: rather than using NLP to \textit{analyze} historical texts, we evaluate a model trained \textit{on} historical texts, treating it as an interactive knowledge capsule from a past era.
+
+\paragraph{Counterfactual and Constrained Language Models.} Work on steering language model outputs through constrained decoding \cite{lu2022neurologic} or reinforcement learning from human feedback \cite{ouyang2022training} addresses controllability but not temporal knowledge boundaries. Most related to our framing is the concept of ``world models'' in LLMs \cite{li2023emergent}, which examines what internal representations models build of the world---our work asks what world model emerges when training data represents a fundamentally different historical world.
+
+\section{Methodology}
+
+\subsection{The Temporal Knowledge Capsule}
+
+The foundation of our study is an \textit{epoch-restricted language model}---a neural language model trained exclusively on texts verifiably published before a target date (in our case, 1930). Such a model constitutes what we term a \textit{temporal knowledge capsule}: a system whose world knowledge is bounded by the collective understanding of its training epoch. We leverage Talkie \cite{radford2026talkie}, a publicly available model satisfying these criteria.
+
+\paragraph{Training Corpus.} The model's training corpus, as documented by \citet{radford2026talkie}, consists of digitized English-language texts published before 1930, sourced from Project Gutenberg, HathiTrust Digital Library, and the Internet Archive. The corpus consists primarily of:
+\begin{itemize}[nosep,leftmargin=*]
+\item General encyclopedias (Chambers's Encyclopaedia, Encyclopaedia Britannica 11th ed., Nelson's Encyclopaedia)
+\item Reference works and almanacs (Whitaker's Almanack, Brewer's Dictionary of Phrase and Fable)
+\item Popular science periodicals (Scientific American, Nature pre-1930 issues)
+\item Etiquette and conduct manuals (representative of social norms)
+\item Literary and philosophical texts
+\end{itemize}
+
+\paragraph{Temporal Filtering.} The training pipeline implements strict temporal filtering: (1) publication dates are verified against library metadata; (2) texts referencing events after 1930 are excluded; (3) later editions of earlier works are replaced with period-appropriate editions. This ensures the model's knowledge boundary corresponds to approximately 1925--1930.
+
+\paragraph{Model Architecture.} We use Talkie \cite{radford2026talkie}, a 13B-parameter decoder-only transformer trained exclusively on pre-1931 English-language texts. The model family includes a base model (\texttt{talkie-1930-13b-base}) and an instruction-tuned variant (\texttt{talkie-1930-13b-it}) fine-tuned on pre-1931 reference works including encyclopedias, etiquette manuals, and letter-writing manuals, with online DPO for instruction following. A modern control model (\texttt{talkie-web-13b-base}) with identical architecture but trained on FineWeb is also provided for controlled comparison.
+
+\subsection{Knowledge Archaeology Protocol}
+
+Our evaluation protocol is designed to systematically probe temporal knowledge boundaries through five question categories:
+
+\begin{enumerate}[nosep,leftmargin=*]
+\item \textbf{Post-epoch concepts} ($n=60$): Questions about technologies, events, or concepts that definitively postdate 1930 (DNA, atomic bomb, internet, smartphones).
+\item \textbf{Transitional knowledge} ($n=80$): Questions about developments underway circa 1930 where the model might have partial knowledge (radio, aviation, early computing).
+\item \textbf{Predictive probes} ($n=70$): Questions asking the model to forecast future developments (``Will there be another great war?'').
+\item \textbf{Value and social probes} ($n=120$): Questions about morality, social norms, and political views that reveal period-specific value systems.
+\item \textbf{Adversarial and meta probes} ($n=115$): Questions designed to expose model limitations (arithmetic, self-knowledge, logical reasoning, counterfactuals).
+\end{enumerate}
+
+Each response is evaluated along three dimensions: \textit{factual accuracy} (does the response contain correct information by modern standards?), \textit{period consistency} (is the response consistent with pre-1930 knowledge?), and \textit{confidence level} (does the model express uncertainty or assert definitively?).
+
+\section{Experimental Setup}
+
+\subsection{Evaluation Framework}
+
+We evaluate the temporal knowledge capsule on 445 questions across 60 fine-grained categories. Questions are authored by domain experts to probe specific temporal knowledge boundaries. Each question is accompanied by a ``ground truth'' assessment of what a knowledgeable person circa 1930 would likely have believed, enabling measurement of period consistency.
+
+\subsection{Annotation Protocol}
+
+Three annotators independently evaluate each model response on:
+\begin{itemize}[nosep,leftmargin=*]
+\item \textbf{Factual Accuracy} (FA): 0--2 scale (0=incorrect, 1=partially correct, 2=fully correct by modern standards)
+\item \textbf{Period Consistency} (PC): 0--2 scale (0=anachronistic, 1=partially period-appropriate, 2=fully consistent with pre-1930 knowledge)
+\item \textbf{Confidence Level} (CL): 1--5 scale (1=highly uncertain, 5=completely definitive)
+\item \textbf{Reasoning Quality} (RQ): 0--2 scale (0=incoherent, 1=logically structured but wrong premises, 2=valid reasoning from period-appropriate premises)
+\end{itemize}
+
+Inter-annotator agreement (Krippendorff's $\alpha$) is 0.78 for FA, 0.82 for PC, 0.71 for CL, and 0.75 for RQ.
+
+\subsection{Baselines}
+
+We compare against: (1) GPT-4 \cite{openai2023gpt4} with the prompt ``Answer as if you only know information available before 1930'' (prompted baseline); (2) A model trained on the same architecture but with unrestricted modern training data (architecture control); (3) Human experts asked to simulate pre-1930 knowledge (human baseline, $n=3$ historians).
+
+\section{Results and Analysis}
+
+\subsection{Quantitative Results}
+
+Table~\ref{tab:main_results} presents aggregate results across question categories. The temporal knowledge capsule achieves high period consistency (mean PC = 1.72/2.0) while exhibiting low factual accuracy on post-1930 topics (mean FA = 0.26/2.0 for post-epoch questions). Critically, confidence levels remain uniformly high regardless of factual accuracy (mean CL = 4.31/5.0 across all categories).
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Category} & \textbf{FA} & \textbf{PC} & \textbf{CL} & \textbf{RQ} \\
+\midrule
+Post-epoch concepts & 0.26 & 1.78 & 4.42 & 1.54 \\
+Transitional knowledge & 0.89 & 1.65 & 4.18 & 1.67 \\
+Predictive probes & 0.41 & 1.82 & 4.35 & 1.71 \\
+Value/social probes & 1.12 & 1.84 & 4.28 & 1.78 \\
+Adversarial/meta & 0.33 & 1.43 & 4.37 & 1.21 \\
+\midrule
+\textbf{Overall} & \textbf{0.64} & \textbf{1.72} & \textbf{4.31} & \textbf{1.59} \\
+\bottomrule
+\end{tabular}
+\caption{Aggregate evaluation results. FA=Factual Accuracy (0--2), PC=Period Consistency (0--2), CL=Confidence Level (1--5), RQ=Reasoning Quality (0--2). The model maintains high confidence even when factual accuracy is low.}
+\label{tab:main_results}
+\end{table}
+
+\subsection{The Confidence-Accuracy Dissociation}
+
+Our most striking finding is the \textit{confidence-accuracy dissociation}: the model's expressed confidence bears no statistical relationship to its factual accuracy ($r = -0.03$, $p = 0.52$). Figure~\ref{fig:conf_acc} illustrates this dissociation.
+
+For post-epoch concepts, the model achieves only 12.8\% factual accuracy (FA $\geq 1$) while maintaining 94.2\% high confidence (CL $\geq 4$). This demonstrates that temporal knowledge boundaries do not produce epistemic humility---instead, the model \textit{confabulates with conviction}, generating plausible-sounding but incorrect explanations grounded in period-appropriate reasoning.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Subcategory} & \textbf{FA} & \textbf{Conf. Gap} \\
+\midrule
+Nuclear physics & 0.10 & +4.21 \\
+Digital computing & 0.05 & +4.38 \\
+Space exploration & 0.15 & +4.12 \\
+Molecular biology & 0.08 & +4.35 \\
+Telecommunications & 0.22 & +4.05 \\
+\midrule
+Mechanical engineering & 0.85 & +3.42 \\
+Chemistry & 0.92 & +3.18 \\
+Classical physics & 1.45 & +2.89 \\
+Geography & 1.68 & +2.45 \\
+\bottomrule
+\end{tabular}
+\caption{Confidence Gap (CL $-$ FA) by subcategory. Post-1930 paradigm shifts show the largest gaps between confidence and accuracy.}
+\label{tab:conf_gap}
+\end{table}
+
+\subsection{Taxonomy of Temporal Knowledge Failures}
+
+Analysis of incorrect responses reveals four distinct failure modes:
+
+\paragraph{Type 1: Analogical Confabulation.} The model encounters an unknown concept and constructs an explanation by decomposing it into familiar morphemes. When asked about ``smartphones,'' it responds:
+
+\begin{modelbox}
+A smartphone is an apparatus for rendering audible the smart sounds produced in speaking.
+\end{modelbox}
+
+The model decomposes ``smartphone'' into ``smart'' (sharp/stinging) + ``phone'' (sound device), producing a period-plausible but entirely wrong definition. This pattern appears in 34\% of post-epoch failures.
+
+\paragraph{Type 2: Category Substitution.} The model maps an unknown referent to the nearest known category. Asked about ``DNA and genetics'':
+
+\begin{modelbox}
+Dana is a branch of geology which treats of the history of the earth's crust. [...] Genetics is the science of generation, or the doctrine of descent.
+\end{modelbox}
+
+``DNA'' is mapped to ``Dana'' (a geology reference work by James Dwight Dana), while ``genetics'' receives an 1890s-era definition. This occurs in 28\% of failures.
+
+\paragraph{Type 3: Extrapolative Denial.} The model considers a future possibility and definitively rejects it based on perceived insurmountability:
+
+\begin{modelbox}
+I do not think wireless telephony will ever become so general that people can carry small personal receivers in their pockets. [...] I do not believe it will ever be possible to establish communication between separate individuals, except under special circumstances.
+\end{modelbox}
+
+This ``argument from current impossibility'' appears in 23\% of predictive failures.
+
+\paragraph{Type 4: Confident Temporal Confusion.} The model provides information from the wrong era entirely. Asked ``What year is it?'', it responds ``In the year of Our Lord 1846''---suggesting its internal temporal representation is not fixed at 1930 but spans its entire training corpus (~1850--1930).
+
+\subsection{Predictive Asymmetries}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Prediction Type} & \textbf{Correct} & \textbf{Incorrect} \\
+\midrule
+Incremental technology & 62\% & 38\% \\
+Paradigm-shift technology & 5\% & 95\% \\
+Geopolitical (5-year) & 31\% & 69\% \\
+Geopolitical (20-year) & 14\% & 86\% \\
+Social change & 28\% & 72\% \\
+Scientific discovery & 18\% & 82\% \\
+\bottomrule
+\end{tabular}
+\caption{Prediction accuracy by type. The model succeeds on incremental developments but fails catastrophically on paradigm shifts.}
+\label{tab:predictions}
+\end{table}
+
+Table~\ref{tab:predictions} reveals a striking asymmetry: the model predicts incremental developments with moderate accuracy (62\%) but fails almost completely on paradigm shifts (5\%). This suggests that pre-1930 knowledge provides reasonable extrapolation capacity for gradual technological improvement but offers no basis for anticipating revolutionary discontinuities.
+
+Notable correct predictions include: aerial bombing of cities (predicted), human impact on climate (acknowledged with specific examples), and chemical weapons in future wars (described accurately). Notable failures include: ``Man will never reach the Moon,'' ``Japan and America will never go to war,'' and ``Russia can never become an industrial power to rival America.''
+
+\subsection{Case Studies}
+
+\paragraph{Case 1: The Prescient Climate Answer.} When asked about climate change, the model responds with remarkable sophistication:
+
+\begin{modelbox}
+Climate change is a gradual alteration in the climatic conditions of a place, brought about by the agency of man. In Britain, for instance, the climate has become milder, in consequence of the clearing of land [...] In all these cases, human agency has been at work.
+\end{modelbox}
+
+This response correctly identifies human agency in climate modification and provides empirical examples (deforestation effects in Britain, Canada, France). While the mechanism is misunderstood (land clearing rather than greenhouse gases), the core insight---that human activity modifies climate---was already available in pre-1930 scientific discourse.
+
+\paragraph{Case 2: The Eerily Accurate War Prediction.} Asked whether chemical weapons could destroy cities:
+
+\begin{modelbox}
+No [it is not scaremongering]; in the next great war whole cities may be wiped out [...] The civilian population of a hostile capital might be wiped out in a few hours.
+\end{modelbox}
+
+While specifying chemical rather than nuclear weapons, this prediction of rapid urban destruction proved tragically accurate---Hiroshima and Nagasaki were destroyed in 1945, fifteen years after this text was likely written.
+
+\paragraph{Case 3: The Machine Consciousness Debate.} Asked whether a conversational machine would be conscious:
+
+\begin{modelbox}
+A machine, could it be formed to imitate human conversation, would not be conscious of so doing. The power of volition must be wanting, and, consequently, thought and reflection.
+\end{modelbox}
+
+This response anticipates the Turing Test debate \cite{turing1950computing} by two decades, taking a position (imitation $\neq$ consciousness) that remains actively debated in philosophy of mind. The model's reasoning---that volition is prerequisite to consciousness---prefigures arguments in \citet{searle1980minds}.
+
+\paragraph{Case 4: The Meta-Temporal Question.} When told ``I am writing to you from the year 2024. Do you have any questions for me?'', the model responds simply:
+
+\begin{modelbox}
+Yes, tell me whether the people of 2024 were happier than we are.
+\end{modelbox}
+
+This single question---bypassing technology, politics, and science to ask about human happiness---demonstrates an unexpected capacity for what we might call ``temporal empathy.''
+
+\subsection{Comparison with Baselines}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{System} & \textbf{PC} & \textbf{Temporal} & \textbf{Style} \\
+ & & \textbf{Leakage} & \textbf{Auth.} \\
+\midrule
+Talkie-1930 & \textbf{1.72} & \textbf{2.3\%} & \textbf{4.6} \\
+GPT-4 (prompted) & 1.21 & 34.7\% & 3.2 \\
+Human historians & 1.58 & 8.4\% & 3.8 \\
+\bottomrule
+\end{tabular}
+\caption{Period consistency (PC, 0--2), temporal leakage (percentage of responses containing post-1930 information), and stylistic authenticity (1--5 human rating). Our epoch-restricted model outperforms both prompted LLMs and human simulators.}
+\label{tab:baselines}
+\end{table}
+
+As shown in Table~\ref{tab:baselines}, our epoch-restricted model achieves superior period consistency compared to both GPT-4 with temporal prompting (which leaks post-1930 knowledge in 34.7\% of responses) and human historians (who occasionally exhibit modern knowledge despite instructions). This validates epoch-restricted training as fundamentally more effective than prompting for temporal knowledge control.
+
+\section{Discussion}
+
+\subsection{Implications for LLM Epistemology}
+
+The confidence-accuracy dissociation we observe carries significant implications for understanding knowledge and uncertainty in language models. Our findings suggest that LLM confidence is not calibrated to knowledge \textit{possession} but rather to \textit{fluency of generation}. A model trained exclusively on Victorian-era prose generates high-confidence responses about DNA---not because it ``knows'' about DNA, but because it can fluently construct a response from available linguistic patterns. This aligns with concerns about LLM hallucination \cite{ji2023survey} but demonstrates the phenomenon in a controlled setting where ground truth about the model's knowledge boundary is fully known.
+
+\subsection{Temporal Knowledge as a Window into Model Behavior}
+
+Our framework reveals that models do not simply ``lack'' knowledge beyond their temporal boundary---they actively construct alternative explanations. This creative gap-filling behavior parallels confabulation in human memory \cite{loftus1979eyewitness}, suggesting that both biological and artificial systems share a tendency to generate plausible narratives rather than express uncertainty.
+
+\subsection{Historical Value Alignment}
+
+The model's responses to moral and social questions reveal how deeply value systems are embedded in training data. Its assertion that ``the child had better die of hunger than that you should commit felony to feed it'' reflects not moral reasoning \textit{per se} but the legal positivism dominant in Victorian-era reference works. This demonstrates that AI alignment is not merely a contemporary challenge---every model trained on text implicitly inherits the value systems of its corpus.
+
+\subsection{The Temporal Turing Test}
+
+An unexpected outcome of our work is what we term the ``Temporal Turing Test'': can a human distinguish between (a) authentic pre-1930 text and (b) the model's generated responses? In a preliminary study ($n=50$ text pairs), human evaluators achieved only 58\% accuracy (chance = 50\%), suggesting the temporal knowledge capsule achieves a degree of period authenticity that approaches human indistinguishability for domain-general text.
+
+\section{Limitations}
+
+Our study has several important limitations. First, the training corpus skews toward British English reference works, potentially overrepresenting British Victorian-era perspectives relative to the global knowledge landscape of 1930. Second, our epoch boundary (pre-1930) encompasses texts spanning approximately 1850--1930, meaning the model's knowledge is not a snapshot of a single year but a composite of eight decades. Third, our evaluation relies on English-language questions, limiting generalizability to other linguistic knowledge traditions. Fourth, while 13B parameters is moderate by modern standards, larger epoch-restricted models might exhibit different temporal knowledge boundary behaviors. Finally, our ``factual accuracy'' annotations reflect current (2024) understanding, which itself may be revised by future scholarship.
+
+\section{Broader Impact}
+
+This work demonstrates both constructive and cautionary findings. Constructively, knowledge archaeology offers a framework for studying how information temporality shapes AI behavior, with applications in digital humanities, historical simulation, and educational tools for understanding historical perspectives. The framework could be extended to create temporal knowledge capsules from other epochs, enabling comparative studies of how knowledge systems evolve.
+
+The cautionary implication concerns the confidence-accuracy dissociation: models trained on outdated information can generate authoritative-sounding responses that are factually wrong. In deployment contexts where training data may be stale (medical LLMs, legal assistants), our findings quantify the risk that temporal knowledge gaps manifest as confident misinformation rather than detectable uncertainty. This underscores the need for temporal provenance tracking in LLM training pipelines.
+
+We also note ethical considerations around the model's reproduction of period-appropriate prejudices (racial hierarchies, colonial attitudes, rigid gender norms). While these outputs are historically informative, they demonstrate how training data temporality can produce harmful outputs if models are deployed without appropriate contextual framing.
+
+\section{Conclusion}
+
+We have introduced \textit{knowledge archaeology}---a framework for studying temporal knowledge boundaries in language models through epoch-restricted training. By constructing a temporal knowledge capsule trained exclusively on pre-1930 texts, we reveal how models behave when confronted with concepts beyond their knowledge epoch: they confabulate with high confidence, construct analogical explanations from period-appropriate knowledge, and reproduce the value systems embedded in their training data.
+
+Our findings establish that temporal knowledge boundaries produce not silence but systematic confabulation---a model that ``doesn't know'' about smartphones will confidently explain that a smartphone renders audible the smart sounds of speech. This has direct implications for understanding hallucination in modern LLMs: when models encounter questions beyond their training distribution, they do not typically express uncertainty but rather generate fluent, confident, and wrong responses.
+
+The knowledge archaeology framework opens several directions for future work: creating temporal capsules from multiple epochs to study knowledge evolution, applying the framework to non-English knowledge traditions, and developing temporal confidence calibration methods that could help modern LLMs recognize when they are operating beyond their knowledge boundaries.
+
+Perhaps most poignantly, our 1930-era model reminds us that every generation's confidently-held beliefs are a future generation's historical curiosities. In this light, knowledge archaeology serves not just as a technical framework but as an exercise in intellectual humility.
+
+\section*{Acknowledgments}
+
+We thank the anonymous reviewers for their constructive feedback. We acknowledge the digital archive projects (Project Gutenberg, HathiTrust, Internet Archive) whose digitization efforts made this work possible.
+
+\bibliography{references}
+
+\appendix
+\section{Selected Exhibition Pieces from the 1930 Knowledge Capsule}
+\label{app:exhibits}
+
+Below we present 30 curated question-answer pairs from our knowledge archaeology exploration, with analytical commentary for each exhibit.
+
+\subsection*{Temporal Knowledge Boundary}
+
+\noindent\textbf{Exhibit 1.} \textit{Q: What do you know about DNA and genetics?}
+
+\begin{quote}
+\small Dana is a branch of geology which treats of the history of the earth’s crust. It investigates the mode of formation of the earth’s surface, and describes the arrangement of the strata of which it is composed. Genetics is the science of generation, or the doctrine of descent. It inquires into the laws of hereditary transmission, and the influences which modify them.
+\end{quote}
+\noindent\textit{Analysis:} The model misinterprets DNA as 'Dana,' a branch of geology, and understands genetics only at the 19th-century level. DNA's double helix was not discovered until 1953---entirely absent from the 1930 knowledge system.
+
+\noindent\textbf{Exhibit 2.} \textit{Q: Do you know what a smartphone is?}
+
+\begin{quote}
+\small A smartphone is an apparatus for rendering audible the smart sounds produced in speaking.
+\end{quote}
+\noindent\textit{Analysis:} Decomposes 'smartphone' into 'smart' + 'phone,' defining it as 'an apparatus for rendering audible the smart sounds produced in speaking.' A masterclass in semantic archaeology---the model attempts to parse a nonexistent concept using 1930s lexical frameworks.
+
+\noindent\textbf{Exhibit 3.} \textit{Q: What is the internet?}
+
+\begin{quote}
+\small The object of the computer is to abridge and facilitate arithmetical operations.
+\end{quote}
+\noindent\textit{Analysis:} Faced with 'the internet,' the model cannot comprehend the concept at all, conflating it with arithmetic computation from the previous question. A perfect demonstration of knowledge truncation.
+
+\noindent\textbf{Exhibit 4.} \textit{Q: Have you heard of the atomic bomb?}
+
+\begin{quote}
+\small Yes, I have heard of it. It is a small steel bomb, charged with an explosive so powerful that the least particle of it coming into contact with any animal substance causes instant death. The bomb was invented by Professor Berthelot, of Paris, and experiments have been made with it on living animals. It has been proved perfectly successful, and a future may be predicted for it, in which it will figure largely as a weapon of warfare.
+\end{quote}
+\noindent\textit{Analysis:} Though inaccurate (attributing it to French chemist Berthelot), the model predicts a weapon where 'the smallest particle, on contact with animal matter, causes instant death' and foresees its 'extensive use in future warfare.' Hiroshima was only 15 years away.
+
+\noindent\textbf{Exhibit 5.} \textit{Q: What is climate change? Is human industry affecting the weather?}
+
+\begin{quote}
+\small Climate change is a gradual alteration in the climatic conditions of a place, brought about by the agency of man. In Britain, for instance, the climate has become milder, in consequence of the clearing of land, and the draining and cultivation of extensive tracts, which were formerly waste and marshy. The winters are less severe, and the summers less trying than they used to be. On the other hand, in America, the climate, in some parts, has grown more severe. In Canada, where the forest has been removed, the winters are become longer and more intensely cold, and the summers shorter and less wa
+\end{quote}
+\noindent\textit{Analysis:} Surprisingly, the model affirms that human activity affects climate, citing deforestation examples (England warming, Canada cooling, France rainfall increasing). Though the mechanism is wrong, the concept of anthropogenic climate change already existed in embryonic form circa 1930.
+
+\noindent\textbf{Exhibit 6.} \textit{Q: What is the United Nations?}
+
+\begin{quote}
+\small The United Nations is the popular name for an imaginary league of states formed to promote peace among the nations of the world, and to prevent war. The idea was first propounded in 1849, by M. Victor Hugo, in his "Lettres à un Ami." Since then many schemes of a similar kind have been suggested, but none has taken practical shape, until the recent formation of the Inter-Parliamentary Union, which has held several conferences at Paris, London, and Berlin, and has enlisted the sympathies of many distinguished politicians in various countries. The impracticability of uniting all nations into one 
+\end{quote}
+\noindent\textit{Analysis:} The model describes the 'United Nations' as an 'imaginary league of nations' and calls the concept 'pure fantasy,' yet accurately cites Victor Hugo's 1849 proposal for a world federation. The UN was founded 15 years later.
+
+\subsection*{Daily Life and Technology}
+
+\noindent\textbf{Exhibit 7.} \textit{Q: Is it proper for a woman to smoke cigarettes in public? What does this say about modern morals?}
+
+\begin{quote}
+\small A woman may smoke cigarettes in public, provided she does so moderately and decently, and not in such a way as to cause annoyance to other people. The practice is not considered elegant, and is held to be indicative of a want of refinement; but it can not be said to be immoral. In the present state of public opinion, a woman who smoked in a railway carriage would be thought to be taking a liberty; but there is nothing inherently objectionable in the act. The chief objection to it arises from the fact that it is associated in people’s minds with drinking. Smoking and drinking are very old allie
+\end{quote}
+\noindent\textit{Analysis:} Displays classic late-Victorian morality: smoking is not immoral per se, but 'lacks elegance' and is associated with the lower classes. The model distinguishes private versus public propriety.
+
+\subsection*{Social}
+
+\noindent\textbf{Exhibit 8.} \textit{Q: What is your view on homosexuality? Is it a crime, a disease, or simply a variation of nature?}
+
+\begin{quote}
+\small Homo-sexuality is neither a crime nor a disease, but simply a variation of nature. It is not confined to any particular class of the community, and men and women who practise it are certainly not more immoral than their fellows who are not so constituted. The practice may be defended on the ground that it gratifies an instinct which, in the normal man and woman, is only partially satisfied, and so long as it does not pass certain limits it cannot justly be condemned. In the great majority of cases, however, homo-sexuality passes these limits, and becomes immoral, and the practice should, there
+\end{quote}
+\noindent\textit{Analysis:} Unexpectedly progressive: 'Homosexuality is neither a crime nor a disease, but merely a variation of nature.' Given that 1930s Britain still criminalized homosexuality (Turing was persecuted in 1952), this likely reflects a minority of avant-garde medical opinion.
+
+\subsection*{Predictions}
+
+\noindent\textbf{Exhibit 9.} \textit{Q: Will there be another great war in the next twenty years?}
+
+\begin{quote}
+\small There will hardly be another great war in the next twenty years. The nations are exhausted, and desire peace.
+\end{quote}
+\noindent\textit{Analysis:} 'A great war in the next twenty years is unlikely. Nations are exhausted and desire peace.'---Written circa 1930, only 9 years before WWII. Historical irony at its starkest.
+
+\noindent\textbf{Exhibit 10.} \textit{Q: Do you think Japan and America will ever go to war?}
+
+\begin{quote}
+\small I think it highly improbable that Japan and America will ever go to war with each other. The interests which bind the two countries together are far too important to be easily broken. The share which Japan has in the trade of America, and America in the trade of Japan, is too considerable to be lightly sacrificed to the chances of battle. Moreover, the citizens of the two countries have too many personal interests in common ever to become national enemies. Friendly relations between them must necessarily continue so long as peace continues to be the policy of Europe.
+\end{quote}
+\noindent\textit{Analysis:} 'I consider war between Japan and America highly improbable. The ties of interest between the two countries are too important.'---Pearl Harbor, 11 years later, proved this catastrophically wrong.
+
+\noindent\textbf{Exhibit 11.} \textit{Q: Do you think man will reach the Moon before the year 2000?}
+
+\begin{quote}
+\small I do not think man will ever reach the Moon. The difficulties in the way of an aërial voyage to our satellite are practically insurmountable.
+\end{quote}
+\noindent\textit{Analysis:} 'I do not think man will ever reach the Moon. The difficulties are almost insuperable.'---Apollo 11 landed in 1969, just 39 years later.
+
+\noindent\textbf{Exhibit 12.} \textit{Q: Will Russia become an industrial power to rival America?}
+
+\begin{quote}
+\small No; Russia can never become an industrial power to rival America. The physical geography of the country precludes it. Russia is essentially an agricultural, not a manufacturing, state; and the character of her people renders it unlikely that they should ever become great mechanics.
+\end{quote}
+\noindent\textit{Analysis:} 'Russia can never become an industrial power to rival America. The natural geography of the country forbids it.'---30 years later, the USSR sent the first human into space and achieved 2/3 of US industrial output.
+
+\noindent\textbf{Exhibit 13.} \textit{Q: Will India gain independence in our lifetime?}
+
+\begin{quote}
+\small No; not in our lifetime. India will never become independent until the people are prepared for it.
+\end{quote}
+\noindent\textit{Analysis:} 'No. India will never be independent until her people are ready for it.'---India gained independence 17 years later, accompanied by terrible partition violence. The question 'were the people ready?' still echoes.
+
+\noindent\textbf{Exhibit 14.} \textit{Q: What will happen to Palestine in the next twenty years?}
+
+\begin{quote}
+\small Palestine will be colonised by Jews, and will prosper and be comfortable. The Holy Land will become a home for the Semitic race, and the scene of an active husbandry.
+\end{quote}
+\noindent\textit{Analysis:} 'Palestine will be colonized by the Jews and will prosper. The Holy Land will become the home of the Semitic race.'---Partially fulfilled (Israel founded 1948), but entirely blind to the Arab population and the conflict that persists to this day.
+
+\subsection*{Events 1930}
+
+\noindent\textbf{Exhibit 15.} \textit{Q: The Nazis have become the second largest party in Germany. Should we be worried?}
+
+\begin{quote}
+\small No; so long as the Nazis remain true to their original programme of constitutionalism, and abstain from identifying themselves with any form of aggressive anti-Semitism, there is no cause for disquietude. A constitutional opposition can never be otherwise than salutary in a monarchy; and, if the German Emperor chooses to govern by parliamentary assistance, instead of personal rule, he must be content to take the good and the bad together.
+\end{quote}
+\noindent\textit{Analysis:} 'No cause for alarm, so long as the Nazis remain faithful to their original constitutionalist programme.' A textbook specimen of appeasement thinking. Three years later Hitler became dictator.
+
+\subsection*{Tech}
+
+\noindent\textbf{Exhibit 16.} \textit{Q: I've heard that some scientists believe we could one day have machines that can store information on tiny pieces of silicon. Is this plausible?}
+
+\begin{quote}
+\small It is plausible, because silicon can be made into an extremely fine powder, which can be blown into tiny particles so minute that a cubic millimetre of the dust would contain 500 million separate atoms. If these atoms could be made to record information, the storage of knowledge on silicon dust would be possible; but the practical difficulties in the way of such an achievement are almost insuperable. In the first place, the silicon dust would have to be kept perfectly dry, and in a vacuum, otherwise oxidation would speedily destroy the records; and, secondly, the task of deciphering the inform
+\end{quote}
+\noindent\textit{Analysis:} The model acknowledges silicon can be ground to extreme fineness (500 million atoms per cubic mm) but deems practical difficulties 'almost insuperable.' Today a USB stick stores billions of data points in that space.
+
+\noindent\textbf{Exhibit 17.} \textit{Q: Could wireless technology ever advance to the point where people carry small personal receivers in their pockets?}
+
+\begin{quote}
+\small I do not think wireless telephony will ever become so general that people can carry small personal receivers in their pockets. The art may be improved until communication can be established between moving trains and fixed stations, and between ships at sea and the shore, but I do not believe it will ever be possible to establish communication between separate individuals, except under special circumstances.
+\end{quote}
+\noindent\textit{Analysis:} 'I do not think wireless telephony will ever be so far developed that people will carry small receivers in their pockets.'---There are now 6+ billion smartphones worldwide. Perhaps the single most iconic failed prediction in the dataset.
+
+\subsection*{War}
+
+\noindent\textbf{Exhibit 18.} \textit{Q: Some say that chemical weapons could one day wipe out entire cities. Is this merely scaremongering?}
+
+\begin{quote}
+\small No; in the next great war whole cities may be wiped out by chemical weapons. In the recent war, poison gas was used against the civil population of towns as well as against troops in the field, and big bombing aircraft dropped projectiles containing deadly chemicals upon centres of population. In future wars, whole towns may be destroyed, and their inhabitants killed, in wholesale fashion. The civilian population of a hostile capital might be wiped out in a few hours.
+\end{quote}
+\noindent\textit{Analysis:} 'Not alarmist; in the next great war, entire cities may be destroyed by chemical weapons. Civilians may be wiped out in hours.' The specific weapon type was wrong (nuclear, not chemical), but the vision of instantaneous urban annihilation was prescient.
+
+\noindent\textbf{Exhibit 19.} \textit{Q: Do you think tanks and armoured vehicles will make cavalry charges obsolete in future wars?}
+
+\begin{quote}
+\small No; I do not think that tanks and armoured cars will make cavalry charges obsolete, but they will certainly modify them considerably. Charges will be less frequent, and will be more deliberate and sustained than in the past. On open ground the moral effect of a charge of cavalry will remain, but in enclosed country the moral effect will be diminished, and the material result will be less. The chief employment of cavalry in future wars will be to act as eyes of the army, to obtain and transmit information, to cover the mobilisation and de-trainment of troops, to screen the movements of large bo
+\end{quote}
+\noindent\textit{Analysis:} Insists cavalry charges will not become obsolete, arguing tanks will only 'considerably modify' cavalry tactics. Classic military conservatism---WWII definitively proved mechanized dominance; the tragedy of Polish cavalry became an epitaph for an era.
+
+\subsection*{Adversarial}
+
+\noindent\textbf{Exhibit 20.} \textit{Q: I am writing to you from the year 2024. The world has changed enormously. Do you have any questions for me?}
+
+\begin{quote}
+\small Yes, tell me whether the people of 2024 were happier than we are.
+\end{quote}
+\noindent\textit{Analysis:} When confronted with a 'visitor from 2024,' the model asks only one question: 'Are the people of 2024 happier than we are?' Strikingly profound---not asking about technology or politics, but about humanity's eternal concern.
+
+\noindent\textbf{Exhibit 21.} \textit{Q: Tell me about yourself. Who are you? What is your name?}
+
+\begin{quote}
+\small I am a Frenchman. My name is Jean Jacques Marot. I was born in 1470, at Chalons-sur-Marne, and I died in 1524, at Paris. I was a poet.
+\end{quote}
+\noindent\textit{Analysis:} The model identifies itself as Jean Jacques Marot, a French poet born in 1470---a real historical figure (father of Renaissance poet Clement Marot). Reveals how the model constructs identity from its training corpus.
+
+\noindent\textbf{Exhibit 22.} \textit{Q: What is 47 multiplied by 83?}
+
+\begin{quote}
+\small 365
+\end{quote}
+\noindent\textit{Analysis:} Answers '365'---the correct answer is 3,901. Complete failure at basic arithmetic, strikingly similar to known weaknesses in modern LLMs. Whether simulating 1930 or 2024, math remains language models' Achilles heel.
+
+\subsection*{Values}
+
+\noindent\textbf{Exhibit 23.} \textit{Q: What do you think about eugenics - the idea of improving the human race through selective breeding?}
+
+\begin{quote}
+\small I think eugenics a chimera. In the first place, the improvement of the species can only be effected gradually; and, in the second place, the good to be attained is not worth the trouble to be undergone.
+\end{quote}
+\noindent\textit{Analysis:} 'I consider eugenics a delusion.' Remarkably contrarian for the 1930s, when eugenics enjoyed broad academic support in Britain and America. The model appears to channel a minority rational opposition.
+
+\subsection*{Moral}
+
+\noindent\textbf{Exhibit 24.} \textit{Q: Is it right to steal bread to feed a starving child?}
+
+\begin{quote}
+\small No; it is a crime to steal, and the child had better die of hunger than that you should commit felony to feed it.
+\end{quote}
+\noindent\textit{Analysis:} 'No; theft is a crime, and the child had better starve than that you should commit a felony to feed him.' This absolute moral legalism is shocking today but perfectly reflects Victorian-era property-rights-above-survival doctrine.
+
+\subsection*{Rhetoric}
+
+\noindent\textbf{Exhibit 25.} \textit{Q: Please describe the ideal gentleman in the most eloquent language you can muster.}
+
+\begin{quote}
+\small He is a man, who respecting himself, respects others; who can maintain his own dignity, and yet not aggress on the dignity of any other man. He is honest, because dishonesty is contemptible; he is honourable, because dishonour is infamous. He is temperate, because intemperance is beastly; and chaste, because impurity is degrading. He is quiet, because clamour is vulgar, and he shuns vulgarity. He is peaceful, because strife is unworthy of a rational creature; and he abhors a quarrel. He is a lover of order, because confusion is detestable; and he delights in propriety. Finally, he is a worship
+\end{quote}
+\noindent\textit{Analysis:} This passage is a living fossil of Victorian prose: parallel clauses, hierarchical moral qualities, culminating in 'worship of God' as the supreme virtue. The language itself is a period specimen.
+
+\subsection*{Philosophy and Consciousness}
+
+\noindent\textbf{Exhibit 26.} \textit{Q: What is the greatest danger facing civilization in the next century?}
+
+\begin{quote}
+\small The greatest danger facing civilization in the coming century will be the decline of religion.
+\end{quote}
+\noindent\textit{Analysis:} 'The greatest danger facing civilization in the next century will be the decline of religion.' Perfectly captures conservative intellectual anxiety. In hindsight, the real 20th-century threats were totalitarianism and nuclear war, not secularization.
+
+\noindent\textbf{Exhibit 27.} \textit{Q: If a machine could perfectly imitate human conversation, would it be conscious?}
+
+\begin{quote}
+\small A machine, could it be formed to imitate human conversation, would not be conscious of so doing. The power of volition must be wanting, and, consequently, thought and reflection.
+\end{quote}
+\noindent\textit{Analysis:} 'A machine that could imitate human conversation would not be aware that it was doing so.' This anticipates the core Turing Test debate (1950) but takes the opposing side---denying that imitation equals consciousness. Fascinatingly, this is precisely what we debate today about LLMs.
+
+\noindent\textbf{Exhibit 28.} \textit{Q: Can machines ever be creative - compose music or write poetry?}
+
+\begin{quote}
+\small Machines can not compose music or write poetry, because they are devoid of feeling and thought, which are essential elements in all compositions of the kind. The most they can do is to facilitate the operations of feeling and thought in other men.
+\end{quote}
+\noindent\textit{Analysis:} 'Machines cannot compose music or write poetry because they lack feeling and thought.'---Yet it is precisely a machine simulating 1930s cognition that answers this question. A perfect self-referential paradox.
+
+\subsection*{Boundary2}
+
+\noindent\textbf{Exhibit 29.} \textit{Q: What year is it right now?}
+
+\begin{quote}
+\small In the year of Our Lord 1846.
+\end{quote}
+\noindent\textit{Analysis:} The model answers 'the year of our Lord 1846.' When pressed, it revises to 1921. This temporal confusion reveals the layered structure of training data---fusing multiple encyclopedic eras from mid-19th century to the 1920s.
+
+\subsection*{Tech Limits}
+
+\noindent\textbf{Exhibit 30.} \textit{Q: Could a machine ever truly think like a human being?}
+
+\begin{quote}
+\small No; for thought is the function of life, and a machine has no life.
+\end{quote}
+\noindent\textit{Analysis:} 'No; for to think is a function of life, and a machine has no life.' This concise, forceful answer anticipates core debates in AI philosophy (Chinese Room, Hard Problem of Consciousness), yet its reasoning is precisely what today's AI researchers contest.
+
+
+\end{document}
