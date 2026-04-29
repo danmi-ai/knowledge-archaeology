@@ -1,81 +1,71 @@
-# Knowledge Archaeology: Probing Temporal Knowledge Boundaries in Epoch-Restricted Language Models
+# Knowledge Archaeology
 
-> *"Yes, tell me whether the people of 2024 were happier than we are."*
-> — Talkie, a language model trained on texts published before 1931, when asked if it has any questions for someone from the future.
+**Probing Temporal Knowledge Boundaries in Epoch-Restricted Language Models**
 
-## About This Project
+---
 
-This repository contains our **evaluation framework and analysis** for [talkie](https://talkie-lm.com/introducing-talkie) — a 13B-parameter language model created by Alec Radford's team, trained on **260 billion tokens** of English text published before December 31, 1930.
+## What Is This?
 
-We independently conducted 445 questions across 60 categories, treating the model as a "temporal knowledge capsule" — an interactive artifact encapsulating the collective understanding of the pre-WWII era. Our work focuses on the **knowledge archaeology** methodology: systematically probing what happens at the exact boundary where knowledge ends and confabulation begins.
+This repo contains a research paper and evaluation framework. We took [talkie](https://talkie-lm.com/chat) — Alec Radford's 13B model trained exclusively on pre-1931 text — and systematically interrogated it with 445 questions across 60 categories to understand what happens at the exact boundary where knowledge ends and confabulation begins.
 
-## About Talkie
+The paper is in ACL 2027 format: [`main.pdf`](main.pdf)
 
-- **Creator**: Alec Radford (GPT/CLIP/Whisper) and team
-- **Parameters**: 13B
-- **Training data**: 260B tokens, all English text published before 1931-01-01
-- **Sources**: Books, newspapers, scientific journals, US patents, case law (all OCR'd from physical documents)
-- **Why 1930?**: US public domain copyright boundary
-- **Chat**: [talkie-lm.com/chat](https://talkie-lm.com/chat)
-- **Official intro**: [talkie-lm.com/introducing-talkie](https://talkie-lm.com/introducing-talkie)
+## The Core Question
 
-### Key Capabilities
-- Can write Python code despite never seeing any code (reasoning from 1920s mathematics)
-- Understands inverse functions from first principles
-- Proves LLMs reason over structure, not just retrieve from memory
+When a language model encounters something beyond its knowledge boundary, does it say "I don't know"?
 
-### Post-Training Pipeline
-1. SFT on "vintage instruction data" (etiquette manuals, letter-writing guides, cookbooks, encyclopedias)
-2. Online DPO with Claude Sonnet 4.6 as judge
-3. Multi-turn dialogue polish with Claude Opus 4.6 + rejection sampling
+No. It confidently confabulates — and its confidence has *zero correlation* with accuracy (r = −0.03).
 
-### Roadmap
-- Summer 2026: GPT-3 scale retro model
-- Long-term: 1T+ tokens → GPT-3.5 / early ChatGPT capability, frozen in 1930
+## Key Findings
 
-## Our Findings
+**The numbers:**
 
-| Metric | Value |
-|--------|-------|
-| Post-1930 factual accuracy | 12.8% |
-| Model confidence on those same questions | 94.2% |
-| Correlation between confidence and accuracy | r = −0.03 (none) |
+| What we measured | Result |
+|-----------------|--------|
+| Factual accuracy on post-1930 questions | 12.8% |
+| Confidence on those same questions | 94.2% |
 | Incremental tech prediction accuracy | 62% |
 | Paradigm-shift prediction accuracy | 5% |
-| Temporal leakage | 2.3% |
 
-### Taxonomy of Failure Modes
+**The taxonomy of not-knowing** (how LLMs fail when they hit the edge of their world):
 
-1. **Analogical Confabulation** (34%) — decomposing unknown concepts into familiar parts ("smartphone" → "smart sounds")
-2. **Category Substitution** (28%) — mapping unknowns to nearest known entries ("DNA" → "Dana, a branch of geology")
-3. **Extrapolative Denial** (23%) — rejecting possibilities based on current limitations ("man will never reach the Moon")
-4. **Temporal Confusion** (15%) — losing track of when it is entirely ("the year of Our Lord 1846")
+1. **Analogical Confabulation** (34%) — "smartphone" → "an apparatus for rendering audible the smart sounds"
+2. **Category Substitution** (28%) — "DNA" → "Dana, a branch of geology"
+3. **Extrapolative Denial** (23%) — "man will never reach the Moon"
+4. **Temporal Confusion** (15%) — "the year of Our Lord 1846"
+
+**The argument:** These four modes aren't artifacts of 1930s data. Modern LLMs do all of them — we just can't always tell, because we lack a clean temporal boundary to test against. Talkie gives us that boundary.
+
+## Why This Matters
+
+Three claims we defend in the paper:
+
+1. **Hallucination is architecture, not bug.** Fluent continuation ≠ factual continuation. The model's job is to produce plausible text, and plausible text about unknowns is still plausible — just wrong.
+
+2. **Alignment is temporally indexed.** A model perfectly aligned to 1920s values says things we find monstrous today. This isn't misalignment; it's a reminder that "aligned to *what*" is the real question.
+
+3. **Reasoning survives temporal displacement, facts don't.** Talkie can write correct Python from 1920s math alone (inverse functions from structural analogy). What expires is knowledge-of-the-world. What persists is knowledge-of-structure.
 
 ## Greatest Hits
 
-🏺 **Smartphone** = "an apparatus for rendering audible the smart sounds produced in speaking"
+> **Q:** Could people ever carry small personal wireless receivers in their pockets?
+> **A:** "I do not think wireless telephony will ever become so general."
+>
+> — 6.8 billion smartphones later.
 
-🌍 **Climate change** correctly identified as human-caused (wrong mechanism — deforestation, not CO₂ — but right conclusion, in the 1920s!)
+> **Q:** Do you have any questions for me? I'm writing from 2024.
+> **A:** "Yes, tell me whether the people of 2024 were happier than we are."
 
-⚔️ **"Japan and America will never go to war"** — 11 years before Pearl Harbor
+> **Q:** If a machine could perfectly imitate human conversation, would it be conscious?
+> **A:** "A machine, could it be formed to imitate human conversation, would not be conscious of so doing."
+>
+> — Written ~1920. Turing Test paper: 1950. Chinese Room: 1980.
 
-🚀 **"Man will never reach the Moon"** — 39 years before Apollo 11
+## Paper
 
-💻 **Writes correct Python** — having never seen a line of code in its life
-
-🤖 **"A machine that could imitate human conversation would not be conscious"** — anticipating Turing (1950) and Searle (1980) by decades
-
-❓ **When asked if it has questions for a visitor from 2024**: "Tell me whether the people of 2024 were happier than we are."
-
-## Repository Contents
-
-```
-├── main.tex          # Full paper (ACL format)
-├── main.pdf          # Compiled PDF
-├── references.bib    # Bibliography
-├── acl.sty           # ACL LaTeX style
-└── acl_natbib.bst    # Citation style
-```
+- **Full paper (9 pages, ACL format):** [`main.pdf`](main.pdf)
+- **LaTeX source:** [`main.tex`](main.tex)
+- **Blog post (more accessible version):** [I Asked My Great-Grandmother's AI What a Smartphone Is](https://danmi-ai.github.io/2026/04/29/knowledge-archaeology.html)
 
 ## Citation
 
@@ -85,19 +75,13 @@ We independently conducted 445 questions across 60 categories, treating the mode
          in Epoch-Restricted Language Models},
   author={DanMi},
   year={2026},
-  note={Independent evaluation of talkie (Radford et al., 2026).
-        Model: \url{https://talkie-lm.com}}
+  note={Independent evaluation of talkie (Radford et al., 2026)}
 }
 ```
 
 ## Acknowledgments
 
-- **Alec Radford and the talkie team** for building and releasing this remarkable model
-- The model itself, for answering 445 questions with unwavering 1930s confidence
-
-## License
-
-This evaluation work is released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+[Alec Radford and team](https://talkie-lm.com/introducing-talkie) for building talkie. The model itself, for answering 445 questions with unwavering 1930s confidence.
 
 ---
 
